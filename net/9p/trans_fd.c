@@ -47,6 +47,7 @@
 
 #include <linux/syscalls.h> /* killme */
 
+
 #define P9_PORT 564
 #define MAX_SOCK_BUF (64*1024)
 #define MAXPOLLWADDR	2
@@ -279,7 +280,12 @@ static int p9_fd_read(struct p9_client *client, void *v, int len)
 	if (!(ts->rd->f_flags & O_NONBLOCK))
 		p9_debug(P9_DEBUG_ERROR, "blocking read ...\n");
 
+	down(&client->poslock);
+	P9_DPRINTK(P9_DEBUG_TRANS, "read at pos %lu\n", client->sc_streampos);
 	ret = kernel_read(ts->rd, ts->rd->f_pos, v, len);
+	if (ret >= 0)
+		client->sc_streampos += ret;
+	up(&client->poslock);
 	if (ret <= 0 && ret != -ERESTARTSYS && ret != -EAGAIN)
 		client->status = Disconnected;
 	return ret;
@@ -294,6 +300,7 @@ static int p9_fd_read(struct p9_client *client, void *v, int len)
 static void p9_read_work(struct work_struct *work)
 {
 	int n, err;
+	int type;
 	struct p9_conn *m;
 
 	m = container_of(work, struct p9_conn, rq);
@@ -348,6 +355,18 @@ static void p9_read_work(struct work_struct *work)
 			err = -EIO;
 			goto error;
 		}
+
+		type = *((unsigned char*) m->rbuf+4);
+		if (type != P9_RERROR && type != P9_RLERROR) {
+			type--; // from R to T
+			if (type != m->req->type) {
+				P9_DPRINTK(P9_DEBUG_ERROR, "Wrong type ! %d instead of %d\n",
+					type, m->req->type);
+				err = -EIO;
+				goto error;
+			}
+		}
+
 
 		if (m->req->rc == NULL) {
 			m->req->rc = kmalloc(sizeof(struct p9_fcall) +
@@ -422,11 +441,16 @@ static int p9_fd_write(struct p9_client *client, void *v, int len)
 	if (!(ts->wr->f_flags & O_NONBLOCK))
 		p9_debug(P9_DEBUG_ERROR, "blocking write ...\n");
 
+	down(&client->poslock);
+	P9_DPRINTK(P9_DEBUG_TRANS, "write at pos %lu\n", client->cs_streampos);
 	oldfs = get_fs();
 	set_fs(get_ds());
 	/* The cast to a user pointer is valid due to the set_fs() */
 	ret = vfs_write(ts->wr, (__force void __user *)v, len, &ts->wr->f_pos);
 	set_fs(oldfs);
+	if (ret >= 0)
+		client->cs_streampos += ret;
+	up(&client->poslock);
 
 	if (ret <= 0 && ret != -ERESTARTSYS && ret != -EAGAIN)
 		client->status = Disconnected;
@@ -937,6 +961,10 @@ p9_fd_create_tcp(struct p9_client *client, const char *addr, char *args)
 		sock_release(csocket);
 		return err;
 	}
+
+	client->cs_streampos = 0;
+	client->sc_streampos = 0;
+	sema_init(&client->poslock, 1);
 
 	return p9_socket_open(client, csocket);
 }

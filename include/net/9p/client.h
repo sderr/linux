@@ -26,6 +26,8 @@
 #ifndef NET_9P_CLIENT_H
 #define NET_9P_CLIENT_H
 
+#include <linux/semaphore.h>
+
 /* Number of requests per row */
 #define P9_ROW_MAXTAG 255
 
@@ -112,6 +114,7 @@ enum p9_req_status_t {
 struct p9_req_t {
 	int status;
 	int t_err;
+	int type; // just to check
 	wait_queue_head_t *wq;
 	struct p9_fcall *tc;
 	struct p9_fcall *rc;
@@ -164,6 +167,10 @@ struct p9_client {
 	struct p9_idpool *tagpool;
 	struct p9_req_t *reqs[P9_ROW_MAXTAG];
 	int max_tag;
+
+	struct semaphore poslock;
+	unsigned long cs_streampos;
+	unsigned long sc_streampos;
 };
 
 /**

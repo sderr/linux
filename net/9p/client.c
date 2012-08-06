@@ -666,6 +666,7 @@ static int p9_client_flush(struct p9_client *c, struct p9_req_t *oldreq)
 	if (IS_ERR(req))
 		return PTR_ERR(req);
 
+	P9_DPRINTK(P9_DEBUG_9P, "<<< RFLUSH tag %d\n", oldtag);
 
 	/* if we haven't received a response for oldreq,
 	   remove it from the list. */
@@ -705,6 +706,8 @@ static struct p9_req_t *p9_client_prepare_req(struct p9_client *c,
 	req = p9_tag_alloc(c, tag, req_size);
 	if (IS_ERR(req))
 		return req;
+
+	req->type = type;
 
 	/* marshall the data */
 	p9pdu_prepare(req->tc, tag, type);
