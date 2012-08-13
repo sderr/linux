@@ -492,7 +492,9 @@ static void p9_write_work(struct work_struct *work)
 	if (m->wpos == m->wsize)
 		m->wpos = m->wsize = 0;
 
-	if (m->wsize == 0 && !list_empty(&m->unsent_req_list)) {
+	clear_bit(Wworksched, &m->wsched);
+
+	if (m->wsize || !list_empty(&m->unsent_req_list)) {
 		if (test_and_clear_bit(Wpending, &m->wsched))
 			n = POLLOUT;
 		else
@@ -501,10 +503,8 @@ static void p9_write_work(struct work_struct *work)
 		if (n & POLLOUT) {
 			p9_debug(P9_DEBUG_TRANS, "sched write work %p\n", m);
 			schedule_work(&m->wq);
-		} else
-			clear_bit(Wworksched, &m->wsched);
-	} else
-		clear_bit(Wworksched, &m->wsched);
+		}
+	}
 
 	return;
 
