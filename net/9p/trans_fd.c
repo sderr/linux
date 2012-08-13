@@ -476,10 +476,9 @@ static void p9_write_work(struct work_struct *work)
 	clear_bit(Wpending, &m->wsched);
 	err = p9_fd_write(m->client, m->wbuf + m->wpos, m->wsize - m->wpos);
 	p9_debug(P9_DEBUG_TRANS, "mux %p sent %d bytes\n", m, err);
-	if (err == -EAGAIN) {
-		clear_bit(Wworksched, &m->wsched);
-		return;
-	}
+	if (err == -EAGAIN)
+		goto end_clear;
+
 
 	if (err < 0)
 		goto error;
@@ -492,6 +491,7 @@ static void p9_write_work(struct work_struct *work)
 	if (m->wpos == m->wsize)
 		m->wpos = m->wsize = 0;
 
+end_clear:
 	clear_bit(Wworksched, &m->wsched);
 
 	if (m->wsize || !list_empty(&m->unsent_req_list)) {
@@ -500,7 +500,8 @@ static void p9_write_work(struct work_struct *work)
 		else
 			n = p9_fd_poll(m->client, NULL);
 
-		if (n & POLLOUT) {
+		if ((n & POLLOUT) && 
+		   !test_and_set_bit(Wworksched, &m->wsched)) {
 			p9_debug(P9_DEBUG_TRANS, "sched write work %p\n", m);
 			schedule_work(&m->wq);
 		}
