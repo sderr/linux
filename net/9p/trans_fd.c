@@ -281,7 +281,7 @@ static int p9_fd_read(struct p9_client *client, void *v, int len)
 		p9_debug(P9_DEBUG_ERROR, "blocking read ...\n");
 
 	down(&client->poslock);
-	P9_DPRINTK(P9_DEBUG_TRANS, "read at pos %lu\n", client->sc_streampos);
+	p9_debug(P9_DEBUG_TRANS, "read at pos %lu\n", client->sc_streampos);
 	ret = kernel_read(ts->rd, ts->rd->f_pos, v, len);
 	if (ret >= 0)
 		client->sc_streampos += ret;
@@ -360,7 +360,7 @@ static void p9_read_work(struct work_struct *work)
 		if (type != P9_RERROR && type != P9_RLERROR) {
 			type--; // from R to T
 			if (type != m->req->type) {
-				P9_DPRINTK(P9_DEBUG_ERROR, "Wrong type ! %d instead of %d\n",
+				p9_debug(P9_DEBUG_ERROR, "Wrong type ! %d instead of %d\n",
 					type, m->req->type);
 				err = -EIO;
 				goto error;
@@ -442,7 +442,7 @@ static int p9_fd_write(struct p9_client *client, void *v, int len)
 		p9_debug(P9_DEBUG_ERROR, "blocking write ...\n");
 
 	down(&client->poslock);
-	P9_DPRINTK(P9_DEBUG_TRANS, "write at pos %lu\n", client->cs_streampos);
+	p9_debug(P9_DEBUG_TRANS, "write at pos %lu\n", client->cs_streampos);
 	oldfs = get_fs();
 	set_fs(get_ds());
 	/* The cast to a user pointer is valid due to the set_fs() */

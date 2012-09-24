@@ -666,7 +666,7 @@ static int p9_client_flush(struct p9_client *c, struct p9_req_t *oldreq)
 	if (IS_ERR(req))
 		return PTR_ERR(req);
 
-	P9_DPRINTK(P9_DEBUG_9P, "<<< RFLUSH tag %d\n", oldtag);
+	p9_debug(P9_DEBUG_9P, "<<< RFLUSH tag %d\n", oldtag);
 
 	/* if we haven't received a response for oldreq,
 	   remove it from the list. */
