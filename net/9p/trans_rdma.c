@@ -299,7 +299,13 @@ handle_recv(struct p9_client *client, struct p9_trans_rdma *rdma,
 	if (!req)
 		goto err_out;
 
-	BUG_ON(req->rc);
+	/* Check that we have not yet received a reply for this request.
+	 */
+	if (unlikely(req->rc)) {
+		pr_err("Duplicate reply for request %d", tag);
+		goto err_out;
+	}
+
 	req->rc = c->rc;
 	BUG_ON(!req->rc);
 	p9_debug(P9_DEBUG_FCALL, "req %p -> rc = %p\n", req, req->rc);
