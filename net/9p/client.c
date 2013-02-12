@@ -258,27 +258,26 @@ p9_tag_alloc(struct p9_client *c, u16 tag, unsigned int max_size)
 	req = &c->reqs[row][col];
 	if (!req->tc) {
 		req->wq = kmalloc(sizeof(wait_queue_head_t), GFP_NOFS);
-		if (!req->wq) {
-			pr_err("Couldn't grow tag array\n");
-			return ERR_PTR(-ENOMEM);
-		}
+		if (!req->wq) 
+			goto grow_failed;
+
 		init_waitqueue_head(req->wq);
 		req->tc = kmalloc(sizeof(struct p9_fcall) + alloc_msize,
 				  GFP_NOFS);
+		if (!req->tc)
+			goto grow_failed;
+
+		req->tc->capacity = alloc_msize;
+		req->tc->sdata = (char *) req->tc + sizeof(struct p9_fcall);
+	}
+	if (!req->rc) {
 		req->rc = kmalloc(sizeof(struct p9_fcall) + alloc_msize,
 				  GFP_NOFS);
-		if ((!req->tc) || (!req->rc)) {
-			pr_err("Couldn't grow tag array\n");
-			kfree(req->tc);
-			kfree(req->rc);
-			kfree(req->wq);
-			req->tc = req->rc = NULL;
-			req->wq = NULL;
-			return ERR_PTR(-ENOMEM);
-		}
-		req->tc->capacity = alloc_msize;
+		if (!req->rc)
+			goto grow_failed;
+
+		p9_debug(P9_DEBUG_FCALL, "req %p -> rc = %p\n", req, req->rc);
 		req->rc->capacity = alloc_msize;
-		req->tc->sdata = (char *) req->tc + sizeof(struct p9_fcall);
 		req->rc->sdata = (char *) req->rc + sizeof(struct p9_fcall);
 	}
 
@@ -288,7 +287,18 @@ p9_tag_alloc(struct p9_client *c, u16 tag, unsigned int max_size)
 	req->tc->tag = tag-1;
 	req->status = REQ_STATUS_ALLOC;
 
-	return &c->reqs[row][col];
+	p9_debug(P9_DEBUG_MUX, "alloc req %p tag %d\n", req, tag-1);
+
+	return req;
+
+grow_failed:
+	pr_err("Couldn't grow tag array\n");
+	kfree(req->tc);
+	kfree(req->rc);
+	kfree(req->wq);
+	req->tc = req->rc = NULL;
+	req->wq = NULL;
+	return ERR_PTR(-ENOMEM);
 }
 
 /**
@@ -394,6 +404,7 @@ static void p9_tag_cleanup(struct p9_client *c)
 static void p9_free_req(struct p9_client *c, struct p9_req_t *r)
 {
 	int tag = r->tc->tag;
+
 	p9_debug(P9_DEBUG_MUX, "clnt %p req %p tag: %d\n", c, r, tag);
 
 	r->status = REQ_STATUS_IDLE;
@@ -793,6 +804,7 @@ again:
 	if (err < 0)
 		goto reterr;
 
+	BUG_ON(!req->rc);
 	err = p9_check_errors(c, req);
 	trace_9p_client_res(c, type, req->rc->tag, err);
 	if (!err)

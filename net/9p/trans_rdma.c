@@ -281,6 +281,8 @@ handle_recv(struct p9_client *client, struct p9_trans_rdma *rdma,
 	int err = 0;
 	int16_t tag;
 
+	p9_debug(P9_DEBUG_FCALL, "recv c %p len %d rc %p\n", c, byte_len, c->rc);
+
 	req = NULL;
 	ib_dma_unmap_single(rdma->cm_id->device, c->busa, client->msize,
 							 DMA_FROM_DEVICE);
@@ -293,10 +295,14 @@ handle_recv(struct p9_client *client, struct p9_trans_rdma *rdma,
 		goto err_out;
 
 	req = p9_tag_lookup(client, tag);
+	p9_debug(P9_DEBUG_FCALL, "tag = %d req = %p\n", tag, req);
 	if (!req)
 		goto err_out;
 
+	BUG_ON(req->rc);
 	req->rc = c->rc;
+	BUG_ON(!req->rc);
+	p9_debug(P9_DEBUG_FCALL, "req %p -> rc = %p\n", req, req->rc);
 	req->status = REQ_STATUS_RCVD;
 	p9_client_cb(client, req);
 
@@ -436,6 +442,8 @@ static int rdma_request(struct p9_client *client, struct p9_req_t *req)
 	if (!req->rc) {
 		req->rc = kmalloc(sizeof(struct p9_fcall)+client->msize,
 				  GFP_NOFS);
+		p9_debug(P9_DEBUG_FCALL, "POUET req %p -> rc = %p\n", req, req->rc);
+
 		if (req->rc) {
 			req->rc->sdata = (char *) req->rc +
 						sizeof(struct p9_fcall);
@@ -459,10 +467,16 @@ static int rdma_request(struct p9_client *client, struct p9_req_t *req)
 		err = post_recv(client, rpl_context);
 		if (err)
 			goto err_free1;
-	} else
+	} else {
 		atomic_dec(&rdma->rq_count);
-
+		/* Buffer not posted, and we are about to drop
+		 * our reference to it. Free it then.
+		 */
+		p9_debug(P9_DEBUG_FCALL, "Freeing req %p -> rc \n", req);
+		kfree(req->rc);
+	}
 	/* remove posted receive buffer from request structure */
+	p9_debug(P9_DEBUG_FCALL, "req %p -> rc = null \n", req);
 	req->rc = NULL;
 
 	/* Post the request */
