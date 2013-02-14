@@ -449,7 +449,6 @@ static int rdma_request(struct p9_client *client, struct p9_req_t *req)
 	if (!req->rc) {
 		req->rc = kmalloc(sizeof(struct p9_fcall)+client->msize,
 				  GFP_NOFS);
-		p9_debug(P9_DEBUG_FCALL, "POUET req %p -> rc = %p\n", req, req->rc);
 
 		if (req->rc) {
 			req->rc->sdata = (char *) req->rc +
