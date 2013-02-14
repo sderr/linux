@@ -430,6 +430,7 @@ static int rdma_request(struct p9_client *client, struct p9_req_t *req)
 	struct ib_sge sge;
 	int err = 0;
 	unsigned long flags;
+	int d;
 	struct p9_rdma_context *c = NULL;
 	struct p9_rdma_context *rpl_context = NULL;
 
@@ -469,16 +470,19 @@ static int rdma_request(struct p9_client *client, struct p9_req_t *req)
 	 * outstanding request, so we must keep a count to avoid
 	 * overflowing the RQ.
 	 */
-	if (atomic_inc_return(&rdma->rq_count) <= rdma->rq_depth) {
+	if ((d = atomic_inc_return(&rdma->rq_count)) <= rdma->rq_depth) {
+		p9_debug(P9_DEBUG_FCALL, "RECV queue depth %d/%d\n", d, rdma->rq_depth);
 		err = post_recv(client, rpl_context);
-		if (err)
+		if (err) {
+			p9_debug(P9_DEBUG_FCALL, "POST RECV failed\n");
 			goto err_free1;
+		}
 	} else {
 		atomic_dec(&rdma->rq_count);
 		/* Buffer not posted, and we are about to drop
 		 * our reference to it. Free it then.
 		 */
-		p9_debug(P9_DEBUG_FCALL, "Freeing req %p -> rc \n", req);
+		p9_debug(P9_DEBUG_FCALL, "RECV queue full, freeing rc %p\n", req->rc);
 		kfree(req->rc);
 	}
 	/* remove posted receive buffer from request structure */
