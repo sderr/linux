@@ -204,6 +204,19 @@ free_and_return:
 	return ret;
 }
 
+struct p9_fcall *p9_fcall_alloc(int alloc_msize)
+{
+	struct p9_fcall *fc;
+	fc = kmalloc(sizeof(struct p9_fcall) + alloc_msize, GFP_NOFS);
+	if (!fc)
+		return NULL;
+	fc->capacity = alloc_msize;
+	fc->sdata = (char *) fc + sizeof(struct p9_fcall);
+	return fc;
+}
+EXPORT_SYMBOL(p9_fcall_alloc);
+
+
 /**
  * p9_tag_alloc - lookup/allocate a request by tag
  * @c: client session to lookup tag within
@@ -256,30 +269,16 @@ p9_tag_alloc(struct p9_client *c, u16 tag, unsigned int max_size)
 	col = tag % P9_ROW_MAXTAG;
 
 	req = &c->reqs[row][col];
-	if (!req->tc) {
+	if (!req->wq) {
 		req->wq = kmalloc(sizeof(wait_queue_head_t), GFP_NOFS);
 		if (!req->wq) 
 			goto grow_failed;
-
 		init_waitqueue_head(req->wq);
-		req->tc = kmalloc(sizeof(struct p9_fcall) + alloc_msize,
-				  GFP_NOFS);
-		if (!req->tc)
-			goto grow_failed;
-
-		req->tc->capacity = alloc_msize;
-		req->tc->sdata = (char *) req->tc + sizeof(struct p9_fcall);
 	}
-	if (!req->rc) {
-		req->rc = kmalloc(sizeof(struct p9_fcall) + alloc_msize,
-				  GFP_NOFS);
-		if (!req->rc)
-			goto grow_failed;
 
-		p9_debug(P9_DEBUG_FCALL, "req %p -> rc = %p\n", req, req->rc);
-		req->rc->capacity = alloc_msize;
-		req->rc->sdata = (char *) req->rc + sizeof(struct p9_fcall);
-	}
+	if (!p9_check_fcall_alloc(&req->tc, alloc_msize) || 
+	    !p9_check_fcall_alloc(&req->rc, alloc_msize))
+		goto grow_failed;
 
 	p9pdu_reset(req->tc);
 	p9pdu_reset(req->rc);

@@ -275,4 +275,13 @@ struct p9_fid *p9_client_xattrwalk(struct p9_fid *, const char *, u64 *);
 int p9_client_xattrcreate(struct p9_fid *, const char *, u64, int);
 int p9_client_readlink(struct p9_fid *fid, char **target);
 
+struct p9_fcall *p9_fcall_alloc(int alloc_msize);
+static inline struct p9_fcall *p9_check_fcall_alloc(struct p9_fcall **ptr, int alloc_msize)
+{
+	if (*ptr)
+		return *ptr;
+	*ptr = p9_fcall_alloc(alloc_msize);
+	return *ptr;
+}
+
 #endif /* NET_9P_CLIENT_H */
