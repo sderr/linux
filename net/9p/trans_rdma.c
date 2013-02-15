@@ -78,6 +78,7 @@
  * @rq_count: Count of requests in the Receive Queue.
  * @addr: The remote peer's address
  * @req_lock: Protects the active request list
+ * @wq: Wait queue used when the buffer queue is full
  * @cm_done: Completion event for connection management tracking
  */
 struct p9_trans_rdma {
@@ -103,6 +104,7 @@ struct p9_trans_rdma {
 	atomic_t rq_count;
 	struct sockaddr_in addr;
 	spinlock_t req_lock;
+	wait_queue_head_t *wq;
 
 	struct completion cm_done;
 };
@@ -350,6 +352,7 @@ static void cq_comp_handler(struct ib_cq *cq, void *cq_context)
 		case IB_WC_RECV:
 			atomic_dec(&rdma->rq_count);
 			handle_recv(client, rdma, c, wc.status, wc.byte_len);
+			wake_up_interruptible(rdma->wq);
 			break;
 
 		case IB_WC_SEND:
@@ -461,6 +464,7 @@ static int rdma_request(struct p9_client *client, struct p9_req_t *req)
 	 * outstanding request, so we must keep a count to avoid
 	 * overflowing the RQ.
 	 */
+retry:
 	if ((d = atomic_inc_return(&rdma->rq_count)) <= rdma->rq_depth) {
 		p9_debug(P9_DEBUG_FCALL, "RECV queue depth %d/%d\n", d, rdma->rq_depth);
 		err = post_recv(client, rpl_context);
@@ -473,8 +477,16 @@ static int rdma_request(struct p9_client *client, struct p9_req_t *req)
 		/* Buffer not posted, and we are about to drop
 		 * our reference to it. Free it then.
 		 */
-		p9_debug(P9_DEBUG_FCALL, "RECV queue full, freeing rc %p\n", req->rc);
-		kfree(req->rc);
+		p9_debug(P9_DEBUG_FCALL, "RECV queue full, queuing rc %p\n", req->rc);
+		err = wait_event_interruptible(*rdma->wq, 
+		               atomic_read(&rdma->rq_count) < rdma->rq_depth);
+		if ((err < 0) && (err != -ERESTARTSYS)) {
+			p9_debug(P9_DEBUG_FCALL, "RECV error %d\n", err);
+			goto error;
+		} else {
+			p9_debug(P9_DEBUG_FCALL, "RECV retry\n");
+			goto retry;
+		}
 	}
 	/* remove posted receive buffer from request structure */
 	p9_debug(P9_DEBUG_FCALL, "req %p -> rc = null \n", req);
@@ -567,6 +579,12 @@ static struct p9_trans_rdma *alloc_rdma(struct p9_rdma_opts *opts)
 	init_completion(&rdma->cm_done);
 	sema_init(&rdma->sq_sem, rdma->sq_depth);
 	atomic_set(&rdma->rq_count, 0);
+	rdma->wq = kmalloc(sizeof(wait_queue_head_t), GFP_NOFS);
+	if (!rdma->wq) {
+		kfree(rdma);
+		return NULL;
+	}
+	init_waitqueue_head(rdma->wq);
 
 	return rdma;
 }
