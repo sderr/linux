@@ -297,7 +297,7 @@ handle_recv(struct p9_client *client, struct p9_trans_rdma *rdma,
 		goto err_out;
 
 	req = p9_tag_lookup(client, tag);
-	p9_debug(P9_DEBUG_FCALL, "tag = %d req = %p\n", tag, req);
+	p9_debug(P9_DEBUG_FCALL | SD, "tag = %d req = %p\n", tag, req);
 	if (!req)
 		goto err_out;
 

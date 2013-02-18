@@ -48,6 +48,7 @@
 
 enum p9_debug_flags {
 	P9_DEBUG_ERROR = 	(1<<0),
+	P9_DEBUG_SD = 		(1<<1),
 	P9_DEBUG_9P = 		(1<<2),
 	P9_DEBUG_VFS =		(1<<3),
 	P9_DEBUG_CONV =		(1<<4),
@@ -60,6 +61,8 @@ enum p9_debug_flags {
 	P9_DEBUG_FSC =		(1<<11),
 	P9_DEBUG_VPKT =		(1<<12),
 };
+
+#define SD P9_DEBUG_SD
 
 #ifdef CONFIG_NET_9P_DEBUG
 extern unsigned int p9_debug_level;

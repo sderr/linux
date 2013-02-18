@@ -50,7 +50,7 @@ void _p9_debug(enum p9_debug_flags level, const char *func,
 	struct va_format vaf;
 	va_list args;
 
-	if ((p9_debug_level & level) != level)
+	if ((p9_debug_level & level) == 0)
 		return;
 
 	va_start(args, fmt);
