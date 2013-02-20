@@ -57,7 +57,7 @@
 #define P9_RDMA_IRD		0
 #define P9_RDMA_ORD		0
 #define P9_RDMA_TIMEOUT		30000		/* 30 seconds */
-#define P9_RDMA_MAXSIZE		(4*4096)	/* Min SGE is 4, so we can
+#define P9_RDMA_MAXSIZE		(256*4096)	/* Min SGE is 4, so we can
 						 * safely advertise a maxsize
 						 * of 64k */
 
