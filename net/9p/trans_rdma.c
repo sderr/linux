@@ -459,9 +459,13 @@ static int rdma_request(struct p9_client *client, struct p9_req_t *req)
 		err = post_recv(client, rpl_context);
 		if (err)
 			goto err_free1;
-	} else
+	} else {
 		atomic_dec(&rdma->rq_count);
-
+		/* Buffer not posted, and we are about to drop
+		 * our reference to it. Free it then.
+		 */
+		kfree(req->rc);
+	}
 	/* remove posted receive buffer from request structure */
 	req->rc = NULL;
 
